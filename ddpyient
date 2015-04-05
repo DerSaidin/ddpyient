@@ -1,0 +1,211 @@
+#!/usr/bin/env python
+
+import argparse
+import ConfigParser
+import os.path
+import sys
+import time
+
+import pydyndnsclient.common as common
+import pydyndnsclient.host as ddhost
+import pydyndnsclient.protocols as ddproto
+import pydyndnsclient.getip as ddgetip
+
+######################################################################
+#
+# DDPYIENT - a Python client for updating Dynamic DNS information
+#
+# Author: Andrew Browne (dersaidin@dersaidin.net)
+#
+######################################################################
+
+CONFIG_DIR = [ '/etc/ddpyient/', os.path.dirname(os.path.realpath(__file__)) ]
+CACHE_DIR = [ '/var/cache/ddpyient/', os.path.dirname(os.path.realpath(__file__)) ]
+
+DATE_FORMAT="%Y-%m-%dT%H:%M:%S.%f"
+
+class ConfItemsAccessor:
+    def __init__(self, sec, items, filename):
+        self.sec = sec
+        self.filename = filename
+        self.itemMap = {}
+        for p in items:
+            (k, v) = p
+            self.itemMap[k] = v
+
+    def get(self, key):
+        if key not in self.itemMap:
+            common.Error(None, "host in section [%s] is missing required option, '%s'" % (self.sec, key))
+            raise Exception("bad host data in section [%s] in %s" % (self.sec, self.filename))
+        return self.itemMap[key]
+
+    def getOrNone(self, key):
+        if key not in self.itemMap:
+            return None
+        return self.itemMap[key]
+
+
+def getConfigFile():
+    for d in CONFIG_DIR:
+        confFile = os.path.join(d, 'ddpyient.conf')
+        try:
+            conf = open(confFile, 'r')
+            return conf
+        except:
+            continue
+    print("error: could not find config")
+    sys.exit(1)
+
+def makeHost(items):
+    host = ddhost.DDHost(protocol=items.get('protocol'),
+        server=items.get('server'),
+        password=items.get('password'),
+        domain=items.get('domain'),
+        subdomain=items.get('subdomain'),
+        login=items.getOrNone('login'))
+    return host
+
+def readConfig():
+    conffp = getConfigFile()
+    conf = ConfigParser.ConfigParser()
+    conf.readfp(conffp)
+    hosts = {}
+    for sec in conf.sections():
+        # Create host for each section
+        try:
+            items = ConfItemsAccessor(sec, conf.items(sec), conffp.name)
+            hosts[sec] = makeHost(items)
+        except Exception as e:
+            print("skipping host in section [%s]" % (sec))
+            if sec in hosts:
+                del hosts[sec]
+            #raise e
+            continue
+    conffp.close()
+    return hosts
+
+def setHostCache(host, items):
+    ip = items.getOrNone('ip')
+    mtime = items.getOrNone('mtime')
+    if mtime:
+        mtime = time.strptime(mtime, DATE_FORMAT)
+    host.updateLatestSet(ip=ip, mtime=mtime)
+
+def readCache(cacheFile, hosts):
+    cachefp = None
+    try:
+        cachefp = open(cacheFile, 'r')
+    except Exception as e:
+        common.Warning(None, "could not open cache for reading at %s:" % (cacheFile))
+        print(e)
+        return
+
+    if not cachefp:
+        common.Warning(None, "could not open cache for reading at %s:" % (cacheFile))
+        return
+
+    try:
+        cache = ConfigParser.ConfigParser()
+        cache.readfp(cachefp)
+        for sec in cache.sections():
+            if sec not in hosts:
+                print("Section [%s] does not match any configured host. Cache section should match a config section.")
+                continue
+            items = ConfItemsAccessor(sec, cache.items(sec), cacheFile)
+            setHostCache(hosts[sec], items)
+        cachefp.close()
+    except Exception as e:
+        common.Warning(None, "could not read cache at %s:" % (cacheFile))
+        print(e)
+
+def putHostCache(cache, sec, host):
+    cache.add_section(sec)
+    setip = host.getLatestSetIP()
+    setmtime = host.getLatestSetMTime()
+    if setip:
+        cache.set(sec, 'ip', str(setip))
+        if setmtime:
+            try:
+                cache.set(sec, 'mtime', str(setmtime.strftime(DATE_FORMAT)))
+            except Exception as e:
+                print(type(setmtime))
+                print(e)
+                pass
+
+def writeCache(cacheFile, hosts):
+    cachefp = None
+    try:
+        cachefp = open(cacheFile, 'w')
+    except Exception as e:
+        common.Warning(None, "could not open cache for writing at %s:" % (cacheFile))
+        print(e)
+        return
+
+    if not cachefp:
+        common.Warning(None, "could not open cache for writing at %s:" % (cacheFile))
+        return
+
+    try:
+        cacheW = ConfigParser.ConfigParser()
+        for sec,host in hosts.items():
+            putHostCache(cacheW, sec, host)
+        cacheW.write(cachefp)
+        cachefp.close()
+    except Exception as e:
+        common.Warning(None, "could not write cache at %s:" % (cacheFile))
+        print(e)
+
+
+def getCacheFile():
+    for d in CACHE_DIR:
+        cacheFile = os.path.join(d, 'ddpyient.cache')
+        try:
+            cachefp = open(cacheFile, 'rw')
+            cachefp.close()
+            return cacheFile
+        except:
+            try:
+                cachefp = open(cacheFile, 'w')
+                cachefp.close()
+                return cacheFile
+            except:
+                continue
+
+    print("warning: no cache file with read write access")
+    return None
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("-D", "--debug", help="Output debug messages", action="store_true")
+    args = parser.parse_args()
+
+    if args.debug:
+        common.DebugEnable()
+
+    # Read hosts from config
+    hosts = readConfig()
+
+    if len(hosts) < 1:
+        common.Error(None, "No valid hosts configured.")
+        sys.exit(1)
+
+    cacheFile = getCacheFile()
+
+    # Read cache for hosts
+    readCache(cacheFile, hosts)
+
+    # Get IP
+    ipWeb = ddgetip.getIPWeb()
+
+    # Update as required
+    for k,host in hosts.items():
+        host.checkUpdate(ipWeb)
+
+    # Write status to cache
+    writeCache(cacheFile, hosts)
+
+    sys.exit(0)
+
+if __name__ == "__main__":
+    main()
+
