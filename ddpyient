@@ -1,7 +1,7 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
 import argparse
-import ConfigParser
+import configparser
 import os.path
 import sys
 import time
@@ -67,7 +67,7 @@ def makeHost(items):
 
 def readConfig():
     conffp = getConfigFile()
-    conf = ConfigParser.ConfigParser()
+    conf = configparser.ConfigParser()
     conf.readfp(conffp)
     hosts = {}
     for sec in conf.sections():
@@ -105,7 +105,7 @@ def readCache(cacheFile, hosts):
         return
 
     try:
-        cache = ConfigParser.ConfigParser()
+        cache = configparser.ConfigParser()
         cache.readfp(cachefp)
         for sec in cache.sections():
             if sec not in hosts:
@@ -129,6 +129,8 @@ def putHostCache(cache, sec, host):
                 cache.set(sec, 'mtime', str(setmtime.strftime(DATE_FORMAT)))
             except Exception as e:
                 print(type(setmtime))
+                print('Exception in putHostCache')
+                print(str(setmtime))
                 print(e)
                 pass
 
@@ -146,7 +148,7 @@ def writeCache(cacheFile, hosts):
         return
 
     try:
-        cacheW = ConfigParser.ConfigParser()
+        cacheW = configparser.ConfigParser()
         for sec,host in hosts.items():
             putHostCache(cacheW, sec, host)
         cacheW.write(cachefp)
@@ -171,7 +173,7 @@ def getCacheFile():
             except:
                 continue
 
-    print("warning: no cache file with read write access")
+    common.Warning(None, "no cache file with read write access")
     return None
 
 def main():
@@ -181,6 +183,9 @@ def main():
 
     if args.debug:
         common.DebugEnable()
+
+    import datetime
+    common.Info(None, 'ddpyient starting at %s' % (str(datetime.datetime.now().strftime(DATE_FORMAT))))
 
     # Read hosts from config
     hosts = readConfig()

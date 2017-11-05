@@ -1,5 +1,5 @@
 
-import urllib2
+import urllib.request
 import pydyndnsclient.common as common
 
 ######################################################################
@@ -41,15 +41,14 @@ class DDCP:
 
         common.Debug(host.getFullDomain(), "%s update: url=%s" % (self.prettyName, url))
 
-        url_request = urllib2.Request(url)
         url_response = None
         try:
-            url_response = urllib2.urlopen(url_request)
-        except URLError as e:
+            url_response = urllib.request.urlopen(url)
+        except Exception as e:
             common.Failed(host.getFullDomain(), "updating: Could not connect to %s." % (host.getServer()));
-            print e.reason
+            print(e.reason)
             raise e
-        reply = url_response.read()
+        reply = url_response.read().decode('utf-8')
 
         common.Debug(host.getFullDomain(), "%s update: response=%s" % (self.prettyName, reply))
 

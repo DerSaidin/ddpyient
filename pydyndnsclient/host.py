@@ -1,6 +1,6 @@
 
-import common
 import datetime
+import pydyndnsclient.common as common
 
 from pydyndnsclient.protocols.protobase import GetDDCP
 
@@ -100,8 +100,7 @@ class DDHost:
     # Updates IP Cache
     def updateLatestSet(self, ip, mtime):
         self.latest_set_ip = ip
-        if mtime:
-            print(type(mtime))
+        if mtime is not None:
             assert(type(mtime) is datetime.datetime)
         self.latest_set_mtime = mtime
 

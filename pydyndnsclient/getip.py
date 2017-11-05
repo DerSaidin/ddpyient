@@ -1,5 +1,5 @@
 
-import urllib2
+import urllib.request
 import re
 
 from pydyndnsclient import common
@@ -19,18 +19,15 @@ def getIPWeb():
     common.Info(None, 'Querying connection internet IP Address...')
     # Get candidate IPs
     ips = []
-    for k,v in get_ip_web.iteritems():
+    for k,v in get_ip_web.items():
         vurl = v['url']
         vskip = v['skip']
         common.Debug(None, '==== IP from %s' % (k))
         reply = ''
         try:
-            f = urllib2.urlopen(vurl)
-            reply = f.read()
+            f = urllib.request.urlopen(vurl)
+            reply = f.read().decode('utf-8')
             f.close()
-        except urllib2.URLError as e:
-            common.Debug(None, 'Failed to get IP from %s: %s' % (k, e.reason))
-            continue
         except Exception as e:
             common.Debug(None, 'Failed to get IP from %s: %s' % (k, str(e)))
             continue
