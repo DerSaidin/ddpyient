@@ -3,7 +3,7 @@
 A python client for updating Dynamic DNS information.
 
 Limitations:
-* only supports namecheap.com Dynamic DNS
+* only supports [namecheap.com Dynamic DNS](https://www.namecheap.com/support/knowledgebase/article.aspx/595/11/how-do-i-enable-dynamic-dns-for-a-domain)
 * only supports IPv4
 
 ## What it does
